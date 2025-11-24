@@ -1,0 +1,56 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.python-version
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE settings
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment variables
+.env
+
+# Data files (portfolio state, logs)
+data/portfolio.json
+data/activity.log
+data/watchlist.json
+
+# Individual test files (ad-hoc testing, not part of test suite)
+test_alpaca_connection.py
+test_crypto.py
+test_gnews.py
+test_news.py
+test_resource.py
+test_technical.py
+test_watchlist.py
+
+# Demo and verification scripts
+demo.py
+verify_mcp.py
+
+# Temporary/unnecessary documentation
+acritic.md
+MCP TOOLS.pdf
+NEWSAPI_SETUP.md
+ALPACA_SETUP.md
+API_REFERENCE.md
+AUDIT_REPORT.md
+ARCHITECTURE.md
+HACKATHON_SUBMISSION.md
+IMPLEMENTATION_SUMMARY.md
+
+# OS files
+.DS_Store
+Thumbs.db

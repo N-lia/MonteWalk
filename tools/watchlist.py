@@ -2,7 +2,10 @@ import json
 import yfinance as yf
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+import logging
 from config import DATA_DIR
+
+logger = logging.getLogger(__name__)
 
 WATCHLIST_FILE = DATA_DIR / "watchlist.json"
 

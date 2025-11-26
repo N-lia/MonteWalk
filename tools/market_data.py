@@ -2,8 +2,11 @@ import time
 import functools
 import yfinance as yf
 import pandas as pd
-import pandas as pd
+import json
+import logging
 from typing import Dict, Any, Optional, List, Literal
+
+logger = logging.getLogger(__name__)
 
 def retry(times=3, delay=1):
     """Decorator to retry functions on failure."""
@@ -37,25 +40,13 @@ def get_price(
     Returns:
         List of dictionaries containing OHLCV data.
     """
-    ticker = yf.Ticker(symbol)
-    """
-    Retrieves historical price data for a given symbol.
-    
-    Args:
-        symbol: Ticker symbol.
-        period: Data period (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max).
-        interval: Data interval (1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo).
-    
-    Returns:
-        JSON string of dictionaries containing OHLCV data.
-    """
     try:
         ticker = yf.Ticker(symbol)
         history = ticker.history(period=period, interval=interval)
         
         if history.empty:
             logger.warning(f"No price data found for {symbol} (period={period}, interval={interval})")
-            return f"No data found for {symbol}"
+            return []
         
         # Reset index to make Date a column
         history.reset_index(inplace=True)
@@ -67,11 +58,11 @@ def get_price(
         data = history.to_dict(orient="records")
         logger.info(f"Fetched {len(data)} price records for {symbol}")
         
-        return json.dumps(data, indent=2)
+        return data
         
     except Exception as e:
-        logger.error(f"Failed to fetch price data for {symbol}: {e}", exc_info=True)
-        return f"Error fetching data for {symbol}: {str(e)}"
+        logger.error(f"Error fetching price data for {symbol}: {e}")
+        return []
 
 def get_fundamentals(symbol: str) -> Dict[str, Any]:
     """

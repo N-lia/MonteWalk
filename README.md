@@ -50,13 +50,22 @@ NEWSAPI_KEY=your_key  # Optional
 ```
 
 ### 4. Run Server
+
+**For Hugging Face Deployment** (Gradio UI + MCP):
 ```bash
-python server.py
+uv run app.py
+```
+
+**For Local Claude Desktop** (stdio-based MCP):
+```bash
+uv run server.py
 ```
 
 ---
 
 ## 🔌 Connect to Claude Desktop
+
+**Local Connection (Recommended)**:
 
 Add to your `claude_desktop_config.json`:
 
@@ -70,6 +79,20 @@ Add to your `claude_desktop_config.json`:
   }
 }
 ```
+
+> **Note**: Replace `/absolute/path/to/MonteWalk` with your actual path.
+
+**Alternative (Streamable HTTP via Gradio)**: If using `app.py`, configure with URL:
+```json
+{
+  "mcpServers": {
+    "montewalk": {
+      "url": "http://localhost:7860/gradio_api/mcp/"
+    }
+  }
+}
+```
+> ⚠️ **Note**: You must start `app.py` BEFORE launching Claude Desktop for this to work.
 
 ---
 

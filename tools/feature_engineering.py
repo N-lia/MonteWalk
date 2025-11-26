@@ -2,6 +2,9 @@ import pandas as pd
 import pandas_ta as ta
 import yfinance as yf
 from typing import List
+import logging
+
+logger = logging.getLogger(__name__)
 
 def compute_indicators(symbol: str, indicators: List[str] = ["RSI", "MACD"]) -> str:
     """

@@ -2,10 +2,85 @@ import pandas as pd
 import pandas_ta as ta
 import yfinance as yf
 import numpy as np
-from typing import Dict, Any, List, Tuple
+import logging
+import json
+from typing import Dict, Any, List, Tuple, Optional
+from pycoingecko import CoinGeckoAPI
+
+logger = logging.getLogger(__name__)
+cg = CoinGeckoAPI()
+
+# Common crypto symbol mappings (can be extended)
+COMMON_CRYPTO_SYMBOLS = {'BTC', 'ETH', 'SHIB', 'SOL', 'XRP', 'ADA', 'DOGE', 'USDC', 'USDT'}
+
+def _get_coingecko_id(symbol: str) -> Optional[str]:
+    """
+    Dynamically search for CoinGecko ID using the search API.
+    Falls back to common mappings for performance.
+    """
+    symbol = symbol.upper()
+    
+    # Try common mappings first (fast)
+    common_map = {
+        'BTC': 'bitcoin',
+        'ETH': 'ethereum',
+        'SHIB': 'shiba-inu',
+        'SOL': 'solana',
+        'XRP': 'ripple',
+        'ADA': 'cardano',
+        'DOGE': 'dogecoin',
+        'USDC': 'usd-coin',
+        'USDT': 'tether',
+    }
+    
+    if symbol in common_map:
+        return common_map[symbol]
+    
+    # Dynamic search for other symbols
+    try:
+        results = cg.search(query=symbol)
+        if results.get('coins'):
+            return results['coins'][0]['id']
+    except Exception as e:
+        logger.debug(f"CoinGecko search failed for {symbol}: {e}")
+    
+    return None
+
+def _fetch_crypto_data(coin_id: str, start: str, end: str):
+    """Fetch historical crypto data from CoinGecko."""
+    try:
+        data = cg.get_coin_market_chart_range_by_id(
+            id=coin_id,
+            vs_currency='usd',
+            from_timestamp=int(pd.to_datetime(start).timestamp()),
+            to_timestamp=int(pd.to_datetime(end).timestamp())
+        )
+        
+        prices = data['prices']
+        volumes = data['total_volumes']
+        
+        df = pd.DataFrame({
+            'Date': pd.to_datetime([p[0] for p in prices], unit='ms'),
+            'Close': [p[1] for p in prices],
+            'Volume': [v[1] for v in volumes] if volumes else [0] * len(prices)
+        })
+        df.set_index('Date', inplace=True)
+        return df
+    except Exception as e:
+        logger.error(f"Failed to fetch crypto data for {coin_id}: {e}")
+        return pd.DataFrame()
 
 def _fetch_data(symbol: str, start: str, end: str):
-    return yf.download(symbol, start=start, end=end, progress=False)
+    """Fetch data from either yfinance (stocks) or CoinGecko (crypto)."""
+    # Try to find CoinGecko ID
+    coin_id = _get_coingecko_id(symbol)
+    if coin_id:
+        logger.info(f"Recognized {symbol} as crypto (CoinGecko ID: {coin_id})")
+        return _fetch_crypto_data(coin_id, start, end)
+    else:
+        # Fall back to stock data
+        logger.info(f"Treating {symbol} as stock symbol")
+        return yf.download(symbol, start=start, end=end, progress=False)
 
 def run_backtest(symbol: str, fast_ma: int, slow_ma: int, start_date: str = "2020-01-01", end_date: str = "2023-12-31") -> str:
     """
@@ -13,21 +88,12 @@ def run_backtest(symbol: str, fast_ma: int, slow_ma: int, start_date: str = "202
     """
     try:
         logger.info(f"Starting backtest for {symbol} (Fast: {fast_ma}, Slow: {slow_ma}) from {start_date} to {end_date}")
-        data = get_price(symbol, interval="1d", period="max")
-        df = pd.DataFrame(json.loads(data))
+        # Use yfinance directly instead of get_price
+        df = _fetch_data(symbol, start_date, end_date)
         
         if df.empty:
             logger.warning(f"Backtest failed: No data for {symbol}")
             return f"No data found for {symbol}"
-            
-        # Filter by date
-        df['Date'] = pd.to_datetime(df['Date'], utc=True)
-        mask = (df['Date'] >= pd.to_datetime(start_date, utc=True)) & (df['Date'] <= pd.to_datetime(end_date, utc=True))
-        df = df.loc[mask].copy()
-        
-        if df.empty:
-            logger.warning(f"Backtest failed: No data in date range for {symbol}")
-            return "No data in specified date range."
             
         # Strategy Logic
         df['Fast_MA'] = ta.sma(df['Close'], length=fast_ma)

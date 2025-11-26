@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import FastMCP
+import gradio as gr
 import logging
 import sys
 from typing import List, Callable
@@ -7,8 +7,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from config import LOG_FILE
-
-
 from tools.market_data import get_price, get_fundamentals, get_orderbook
 from tools.execution import place_order, cancel_order, get_positions, flatten, get_order_history
 from tools.risk_engine import portfolio_risk, var, max_drawdown, monte_carlo_simulation
@@ -16,25 +14,21 @@ from tools.backtesting import run_backtest, walk_forward_analysis
 from tools.feature_engineering import compute_indicators, rolling_stats, get_technical_summary
 from tools.portfolio_optimizer import mean_variance_optimize, risk_parity
 from tools.logger import setup_logging, log_action
-from tools.news_intelligence import get_news, analyze_sentiment, get_symbol_sentiment
-from tools.watchlist import add_to_watchlist, remove_from_watchlist, get_watchlist_data
+from tools.news_intelligence import get_news, analyze_sentiment, get_symbol_sentiment, get_latest_news_for_watchlist
+from tools.watchlist import add_to_watchlist, remove_from_watchlist, get_watchlist_data, _load_watchlist
 from tools.crypto_data import get_crypto_price, get_crypto_market_data, get_trending_crypto, search_crypto
 from tools.alpaca_broker import get_broker
+
 
 setup_logging()
 logger = logging.getLogger(__name__)
 
+# --- Local Tools ---
 
-mcp = FastMCP("MonteWalk")
-logger.info("MonteWalk MCP Server initializing...")
-
-# Health check
-@mcp.tool()
 def health_check() -> str:
     """Returns the health status of the MonteWalk server."""
     return "MonteWalk Server is running and healthy."
 
-@mcp.tool()
 def get_account_info() -> str:
     """
     Get detailed Alpaca account information including equity, buying power, and day trade status.
@@ -55,7 +49,6 @@ Day Trade Count: {account['daytrade_count']}
     except Exception as e:
         return f"ERROR: Failed to get account info - {str(e)}"
 
-@mcp.resource("portfolio://summary")
 def get_portfolio_summary() -> str:
     """
     Returns a live summary of the portfolio from Alpaca (Cash, Positions, Equity).
@@ -91,7 +84,6 @@ def get_portfolio_summary() -> str:
     except Exception as e:
         return f"ERROR: Failed to get portfolio - {str(e)}\n\nMake sure your Alpaca credentials are set in .env file."
 
-@mcp.resource("market://watchlist")
 def get_watchlist_resource() -> str:
     """
     Returns a live view of the watchlist with current prices.
@@ -110,32 +102,24 @@ def get_watchlist_resource() -> str:
             
     return "\n".join(summary)
 
-@mcp.resource("news://latest")
 def get_news_resource() -> str:
     """
     Returns the latest news headlines for the watchlist.
     """
-    from tools.news_intelligence import get_latest_news_for_watchlist
     return get_latest_news_for_watchlist()
 
-@mcp.resource("crypto://trending")
 def get_crypto_resource() -> str:
     """
     Returns the top trending cryptocurrencies.
     """
     return get_trending_crypto()
 
+# --- Prompts (Converted to Tools) ---
 
-# --- PROMPTS ---
-
-@mcp.prompt()
 def morning_briefing() -> str:
     """
     Generates a morning briefing prompt with Portfolio and Watchlist context.
     """
-    from tools.execution import get_positions
-    from tools.watchlist import _load_watchlist
-    
     portfolio = get_positions()
     owned_symbols = list(portfolio.get('positions', {}).keys())
     watchlist = _load_watchlist()
@@ -175,7 +159,6 @@ OUTPUT FORMAT:
 💡 **Today's Recommendations**: [Actions to consider]
 """
 
-@mcp.prompt()
 def analyze_ticker(symbol: str) -> str:
     """
     Deep dive analysis prompt for a specific ticker.
@@ -195,13 +178,10 @@ OUTPUT:
 - Technical Levels (Support/Resistance)
 """
 
-@mcp.prompt()
 def risk_analysis() -> str:
     """
     Comprehensive risk analysis prompt for the current portfolio.
     """
-    from tools.execution import get_positions
-    
     portfolio = get_positions()
     positions = portfolio.get('positions', {})
     
@@ -224,7 +204,6 @@ OUTPUT:
 - Recommended Actions (hedge, reduce exposure, etc.)
 """
 
-@mcp.prompt()
 def backtest_strategy(symbol: str, fast_ma: int = 10, slow_ma: int = 50) -> str:
     """
     Backtesting workflow prompt.
@@ -247,7 +226,6 @@ OUTPUT:
 - Suggested parameter improvements
 """
 
-@mcp.prompt()
 def crypto_market_update() -> str:
     """
     Cryptocurrency market analysis prompt.
@@ -268,7 +246,6 @@ OUTPUT:
 - Any notable price movements or news
 """
 
-@mcp.prompt()
 def portfolio_rebalance(target_symbols: str = "AAPL,MSFT,GOOGL") -> str:
     """
     Portfolio rebalancing workflow prompt.
@@ -292,15 +269,10 @@ OUTPUT:
 - Implementation timeline (all at once or gradual?)
 """
 
-@mcp.prompt()
 def sync_watchlist() -> str:
     """
     Intelligent watchlist synchronization with portfolio holdings.
-    Agent automatically adds owned symbols and optionally removes sold symbols.
     """
-    from tools.execution import get_positions
-    from tools.watchlist import _load_watchlist
-    
     portfolio = get_positions()
     owned_symbols = list(portfolio.get('positions', {}).keys())
     watchlist = _load_watchlist()
@@ -350,86 +322,60 @@ Run this sync automatically:
 - Before risk analysis
 """
 
+# --- Tool Organization ---
 
+tools_map = {
+    "Dashboard": [health_check, get_account_info, get_portfolio_summary],
+    "Market Data": [get_price, get_fundamentals, get_orderbook],
+    "Execution": [place_order, cancel_order, get_positions, flatten, get_order_history],
+    "Risk Engine": [portfolio_risk, var, max_drawdown, monte_carlo_simulation],
+    "Backtesting": [run_backtest, walk_forward_analysis],
+    "Feature Engineering": [compute_indicators, rolling_stats, get_technical_summary],
+    "Portfolio Opt": [mean_variance_optimize, risk_parity],
+    "News & Sentiment": [get_news, analyze_sentiment, get_symbol_sentiment, get_news_resource],
+    "Watchlist": [add_to_watchlist, remove_from_watchlist, get_watchlist_resource, sync_watchlist],
+    "Crypto": [get_crypto_price, get_crypto_market_data, get_trending_crypto, search_crypto, get_crypto_resource, crypto_market_update],
+    "Prompts": [morning_briefing, analyze_ticker, risk_analysis, backtest_strategy, portfolio_rebalance],
+    "Utils": [log_action]
+}
 
-def register_tools(tools: List[Callable], category: str):
-    """Helper to register multiple tools with logging."""
-    for tool in tools:
-        try:
-            mcp.tool()(tool)
-            logger.info(f"Registered {category} tool: {tool.__name__}")
-        except Exception as e:
-            logger.error(f"Failed to register {tool.__name__}: {e}")
-            raise
+import inspect
 
+def create_interface(tool: Callable):
+    """Creates a Gradio Interface for a tool by inferring inputs/outputs."""
+    sig = inspect.signature(tool)
+    
+    inputs = []
+    for name, param in sig.parameters.items():
+        if param.annotation == int:
+            inputs.append(gr.Number(label=name, precision=0))
+        elif param.annotation == float:
+            inputs.append(gr.Number(label=name))
+        elif param.annotation == bool:
+            inputs.append(gr.Checkbox(label=name))
+        else:
+            inputs.append(gr.Textbox(label=name))
+    outputs = gr.Textbox(label="Result")
+    
+    return gr.Interface(
+        fn=tool,
+        inputs=inputs,
+        outputs=outputs,
+        flagging_mode="never"
+    )
 
-# Tool Registration
-try:
-    logger.info("Starting Quant Agent MCP Server initialization...")
-    
-    register_tools(
-        [get_price, get_fundamentals, get_orderbook],
-        "Market Data"
-    )
-    
-    register_tools(
-        [place_order, cancel_order, get_positions, flatten, get_order_history],
-        "Execution"
-    )
-    
-    register_tools(
-        [portfolio_risk, var, max_drawdown, monte_carlo_simulation],
-        "Risk Engine"
-    )
-    
-    register_tools(
-        [run_backtest, walk_forward_analysis],
-        "Backtesting"
-    )
-    
-    register_tools(
-        [compute_indicators, rolling_stats, get_technical_summary],
-        "Feature Engineering"
-    )
-    
-    register_tools(
-        [mean_variance_optimize, risk_parity],
-        "Portfolio Optimization"
-    )
-    
-    register_tools(
-        [log_action],
-        "Logging"
-    )
-    
-    register_tools(
-        [get_news, analyze_sentiment, get_symbol_sentiment],
-        "News & Sentiment"
-    )
-    
-    register_tools(
-        [add_to_watchlist, remove_from_watchlist],
-        "Watchlist"
-    )
-    
-    register_tools(
-        [get_crypto_price, get_crypto_market_data, get_trending_crypto, search_crypto],
-        "Cryptocurrency"
-    )
-    
-    logger.info("All tools registered successfully.")
-    
-except Exception as e:
-    logger.critical(f"Failed to initialize server: {e}")
-    sys.exit(1)
+# --- Gradio App ---
 
+with gr.Blocks(title="MonteWalk MCP Server") as demo:
+    gr.Markdown("# MonteWalk MCP Server")
+    gr.Markdown("This Gradio app exposes the MonteWalk trading tools as an MCP Server.")
+    
+    for category, tools in tools_map.items():
+        with gr.Tab(category):
+            for tool in tools:
+                with gr.Accordion(tool.__name__, open=False):
+                    create_interface(tool)
 
 if __name__ == "__main__":
-    logger.info("Starting MCP server...")
-    try:
-        mcp.run()
-    except KeyboardInterrupt:
-        logger.info("Server shutdown by user.")
-    except Exception as e:
-        logger.critical(f"Server crashed: {e}")
-        sys.exit(1)
+    logger.info("Starting MonteWalk Gradio MCP Server...")
+    demo.launch(server_name="0.0.0.0", server_port=7860, mcp_server=True)

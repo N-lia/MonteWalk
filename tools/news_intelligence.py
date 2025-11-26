@@ -53,13 +53,25 @@ def get_news(symbol: str, max_items: int = 10) -> str:
         # Limit results
         news = news[:max_items]
         
-        # Extract relevant fields
+        # Extract relevant fields (handle nested yfinance structure)
         results = []
         for item in news:
+            # yfinance returns nested structure with 'content' key
+            content = item.get("content", item)  # fallback to item if no content key
+            title = content.get("title", "")
+            
+            # Publisher info is in 'provider' dict
+            provider = content.get("provider", {})
+            publisher = provider.get("displayName", "") if isinstance(provider, dict) else item.get("publisher", "")
+            
+            link = content.get("canonicalUrl", {}).get("url", "")
+            if not link:
+                link = item.get("link", "")
+            
             results.append({
-                "title": item.get("title", ""),
-                "publisher": item.get("publisher", ""),
-                "link": item.get("link", ""),
+                "title": title,
+                "publisher": publisher,
+                "link": link,
             })
         
         logger.info(f"Fetched {len(results)} news items for {symbol} from yfinance")
@@ -210,6 +222,7 @@ def get_symbol_sentiment(symbol: str) -> str:
 def get_latest_news_for_watchlist() -> str:
     """
     Aggregates the top news headline for each symbol in the watchlist.
+    Falls back to GNews if yfinance returns no results.
     """
     watchlist = _load_watchlist()
     if not watchlist:
@@ -219,16 +232,27 @@ def get_latest_news_for_watchlist() -> str:
     
     for symbol in watchlist:
         try:
+            # Try yfinance first
             ticker = yf.Ticker(symbol)
             news = ticker.news
-            if news:
+            
+            # If yfinance empty, try GNews
+            if not news:
+                gnews_results = get_google_news(symbol, max_items=1)
+                if gnews_results:
+                    top_item = gnews_results[0]
+                    title = top_item.get("title", "No Title")
+                    publisher = top_item.get("publisher", "Unknown")
+                    summary.append(f"[{symbol}] {title} ({publisher})")
+                else:
+                    summary.append(f"[{symbol}] No recent news.")
+            else:
                 top_item = news[0]
                 title = top_item.get("title", "No Title")
                 publisher = top_item.get("publisher", "Unknown")
                 summary.append(f"[{symbol}] {title} ({publisher})")
-            else:
-                summary.append(f"[{symbol}] No recent news.")
-        except Exception:
+        except Exception as e:
+            logger.error(f"Error fetching news for {symbol}: {e}")
             summary.append(f"[{symbol}] Error fetching news.")
             
     return "\n".join(summary)

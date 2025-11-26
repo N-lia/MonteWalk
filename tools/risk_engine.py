@@ -2,7 +2,10 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 from typing import Dict, Any, List, Optional, Literal
-from tools.execution import get_positions, _load_portfolio
+from tools.execution import get_positions
+import logging
+
+logger = logging.getLogger(__name__)
 
 def _get_portfolio_data(lookback: str = "1y"):
     portfolio = get_positions()
@@ -138,7 +141,7 @@ def validate_trade(symbol: str, side: Literal["buy", "sell"], qty: float, curren
     Returns:
         None if valid, otherwise an error message string.
     """
-    portfolio = _load_portfolio()
+    portfolio = get_positions()
     cash = portfolio["cash"]
     
     # 1. Max Position Size Limit (e.g., 20% of total equity)

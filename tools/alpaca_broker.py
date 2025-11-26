@@ -16,7 +16,7 @@ from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_PAPER_TRADING
 import logging
-import os # Added os import
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,6 @@ class AlpacaBroker:
                 "side": pos.side
             }
         except Exception as e:
-            # Position doesn't exist
             logger.debug(f"No position for {symbol}: {e}")
             return None
     

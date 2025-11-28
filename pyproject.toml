@@ -18,4 +18,7 @@ dependencies = [
     "alpaca-py",
     "gradio[mcp,oauth]==6.0.0.dev4",
     "python-dotenv",
+    "modal>=0.63.0",
+    "requests",
+    "pydantic>=2.12.3",
 ]

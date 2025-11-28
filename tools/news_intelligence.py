@@ -13,6 +13,11 @@ import logging
 from tools.watchlist import _load_watchlist
 from newsapi import NewsApiClient
 from config import NEWSAPI_KEY
+import requests
+import os
+
+# Placeholder URL - User must update this after deployment
+MODAL_ENDPOINT_URL = os.getenv("MODAL_ENDPOINT_URL", "https://replace-me-with-your-modal-url.modal.run")
 
 logger = logging.getLogger(__name__)
 
@@ -144,36 +149,69 @@ def get_newsapi_articles(symbol: str, max_items: int = 5) -> List[Dict]:
 
 def analyze_sentiment(text: str) -> Dict[str, Any]:
     """
-    Analyzes the sentiment of a given text using TextBlob.
+    Analyzes the sentiment of a given text using FinBERT on Modal (via Public Endpoint)
+    or falls back to TextBlob.
     
     Args:
         text: Text to analyze (e.g., news headline, article).
     
     Returns:
-        Dictionary with polarity, subjectivity, and classification.
+        Dictionary with polarity, confidence, and classification.
     """
+    # Try Modal first
     try:
-        blob = TextBlob(text)
-        polarity = blob.sentiment.polarity  # -1 (negative) to 1 (positive)
-        subjectivity = blob.sentiment.subjectivity  # 0 (objective) to 1 (subjective)
+        # Check if URL is configured
+        if "replace-me" in MODAL_ENDPOINT_URL:
+            raise ValueError("Modal URL not configured")
+
+        response = requests.post(MODAL_ENDPOINT_URL, json={"text": text}, timeout=5)
+        response.raise_for_status()
+        result = response.json()
         
-        # Classify
-        if polarity > 0.2:
-            classification = "POSITIVE"
-        elif polarity < -0.2:
-            classification = "NEGATIVE"
+        # FinBERT returns {'label': 'positive'/'negative'/'neutral', 'score': float}
+        label = result['label'].upper()
+        score = result['score']
+        
+        # Map to polarity-like score for compatibility (-1 to 1)
+        if label == "POSITIVE":
+            polarity = score
+        elif label == "NEGATIVE":
+            polarity = -score
         else:
-            classification = "NEUTRAL"
-        
+            polarity = 0.0
+            
         return {
             "text": text[:100] + "..." if len(text) > 100 else text,
             "polarity": round(polarity, 3),
-            "subjectivity": round(subjectivity, 3),
-            "classification": classification
+            "subjectivity": 0.0, # FinBERT doesn't give subjectivity
+            "classification": label,
+            "model": "FinBERT (Modal Public)"
         }
         
     except Exception as e:
-        return {"error": f"Error analyzing sentiment: {str(e)}"}
+        logger.warning(f"Modal FinBERT failed ({e}), falling back to TextBlob")
+        # Fallback to TextBlob
+        try:
+            blob = TextBlob(text)
+            polarity = blob.sentiment.polarity
+            subjectivity = blob.sentiment.subjectivity
+            
+            if polarity > 0.2:
+                classification = "POSITIVE"
+            elif polarity < -0.2:
+                classification = "NEGATIVE"
+            else:
+                classification = "NEUTRAL"
+            
+            return {
+                "text": text[:100] + "..." if len(text) > 100 else text,
+                "polarity": round(polarity, 3),
+                "subjectivity": round(subjectivity, 3),
+                "classification": classification,
+                "model": "TextBlob (Fallback)"
+            }
+        except Exception as e2:
+             return {"error": f"Error analyzing sentiment: {str(e2)}"}
 
 
 def get_symbol_sentiment(symbol: str) -> str:
@@ -194,11 +232,15 @@ def get_symbol_sentiment(symbol: str) -> str:
             return f"No news found for {symbol}"
         
         sentiments = []
+        model_used = "Unknown"
+        
         for item in news:
             title = item.get("title", "")
             if title:
-                blob = TextBlob(title)
-                sentiments.append(blob.sentiment.polarity)
+                result = analyze_sentiment(title)
+                if "polarity" in result:
+                    sentiments.append(result["polarity"])
+                    model_used = result.get("model", "Unknown")
         
         if not sentiments:
             return f"No valid news titles for {symbol}"
@@ -214,7 +256,8 @@ def get_symbol_sentiment(symbol: str) -> str:
         
         return (f"Sentiment Analysis for {symbol} ({len(sentiments)} articles):\n"
                 f"Average Polarity: {avg_polarity:.3f}\n"
-                f"Market Sentiment: {classification}")
+                f"Market Sentiment: {classification}\n"
+                f"Model: {model_used}")
         
     except Exception as e:
         return f"Error analyzing sentiment for {symbol}: {str(e)}"

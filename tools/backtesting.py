@@ -82,9 +82,17 @@ def _fetch_data(symbol: str, start: str, end: str):
         logger.info(f"Treating {symbol} as stock symbol")
         return yf.download(symbol, start=start, end=end, progress=False)
 
-def run_backtest(symbol: str, fast_ma: int, slow_ma: int, start_date: str = "2020-01-01", end_date: str = "2023-12-31") -> str:
+def run_backtest(symbol: str, fast_ma: int, slow_ma: int, start_date: str = "2020-01-01", end_date: str = "2023-12-31", visualize: bool = False) -> str:
     """
     Backtests a Moving Average Crossover strategy.
+    
+    Args:
+        symbol: Ticker symbol
+        fast_ma: Fast moving average period
+        slow_ma: Slow moving average period  
+        start_date: Backtest start date
+        end_date: Backtest end date
+        visualize: If True, returns equity curve chart
     """
     try:
         logger.info(f"Starting backtest for {symbol} (Fast: {fast_ma}, Slow: {slow_ma}) from {start_date} to {end_date}")
@@ -108,6 +116,10 @@ def run_backtest(symbol: str, fast_ma: int, slow_ma: int, start_date: str = "202
         df['Market_Return'] = df['Close'].pct_change()
         df['Strategy_Return'] = df['Market_Return'] * df['Signal'].shift(1)
         
+        # Equity Curves
+        df['Strategy_Equity'] = (1 + df['Strategy_Return']).cumprod()
+        df['BuyHold_Equity'] = (1 + df['Market_Return']).cumprod()
+        
         # Metrics
         total_return = (1 + df['Strategy_Return']).prod() - 1
         buy_hold_return = (1 + df['Market_Return']).prod() - 1
@@ -130,6 +142,26 @@ def run_backtest(symbol: str, fast_ma: int, slow_ma: int, start_date: str = "202
             f"Sharpe Ratio: {sharpe:.2f}\n"
             f"Max Drawdown: {max_dd:.2%}"
         )
+        
+        if visualize:
+            try:
+                from tools.visualizer import plot_line
+                df_clean = df.dropna(subset=['Strategy_Equity', 'BuyHold_Equity'])
+                chart = plot_line(
+                    {
+                        'x': list(range(len(df_clean))),
+                        'y': [df_clean['Strategy_Equity'].tolist(), df_clean['BuyHold_Equity'].tolist()]
+                    },
+                    x_label="Days",
+                    y_label="Equity (Initial = $1)",
+                    title=f"Backtest: {symbol} MA({fast_ma}/{slow_ma})",
+                    labels=["Strategy", "Buy & Hold"]
+                )
+                result += f"\n\n{chart}"
+            except Exception as e:
+                logger.error(f"Error generating backtest chart: {e}")
+                result += f"\n(Visualization error: {str(e)})"
+        
         logger.info(f"Backtest completed for {symbol}. Return: {total_return:.2%}")
         return result
 

@@ -30,3 +30,9 @@ ALPACA_API_KEY = os.getenv("ALPACA_API_KEY", "")
 ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY", "")
 ALPACA_PAPER_TRADING = True  # Safety: Always use paper trading
 ALPACA_BASE_URL = "https://paper-api.alpaca.markets/v2"
+
+# Modal FinBERT Sentiment Analysis
+MODAL_ENDPOINT_URL = os.getenv(
+    "MODAL_ENDPOINT_URL", 
+    "https://mariocaleb124--montewalk-sentiment-sentimentmodel-predict.modal.run"
+)

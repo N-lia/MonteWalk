@@ -27,8 +27,9 @@ def retry(times=3, delay=1):
 def get_price(
     symbol: str, 
     interval: Literal["1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo"] = "1d", 
-    period: Literal["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"] = "1y"
-) -> List[Dict[str, Any]]:
+    period: Literal["1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"] = "1y",
+    visualize: bool = False
+) -> str:
     """
     Retrieves historical price data (OHLCV) for a given symbol.
     
@@ -36,9 +37,10 @@ def get_price(
         symbol: The ticker symbol (e.g., 'AAPL', 'BTC-USD').
         interval: Data interval. Valid values: "1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo".
         period: Data period to download. Valid values: "1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max".
+        visualize: If True, returns a candlestick chart instead of raw data.
         
     Returns:
-        List of dictionaries containing OHLCV data.
+        JSON string of OHLCV data or base64-encoded candlestick chart.
     """
     try:
         ticker = yf.Ticker(symbol)
@@ -46,10 +48,28 @@ def get_price(
         
         if history.empty:
             logger.warning(f"No price data found for {symbol} (period={period}, interval={interval})")
-            return []
+            return json.dumps([])
         
         # Reset index to make Date a column
         history.reset_index(inplace=True)
+        
+        if visualize:
+            try:
+                from tools.visualizer import plot_candlestick
+                # Convert to DataFrame format expected by visualizer
+                df = history[['Date', 'Open', 'High', 'Low', 'Close']].copy()
+                if 'Volume' in history.columns:
+                    df['Volume'] = history['Volume']
+                
+                chart = plot_candlestick(
+                    df,
+                    title=f"{symbol} - {period} ({interval} interval)",
+                    volume='Volume' in df.columns
+                )
+                return chart
+            except Exception as e:
+                logger.error(f"Error generating candlestick chart: {e}")
+                # Fall through to return data
         
         # Convert to JSON-friendly format (list of dicts)
         # Convert timestamps to string
@@ -58,11 +78,11 @@ def get_price(
         data = history.to_dict(orient="records")
         logger.info(f"Fetched {len(data)} price records for {symbol}")
         
-        return data
+        return json.dumps(data, indent=2)
         
     except Exception as e:
         logger.error(f"Error fetching price data for {symbol}: {e}")
-        return []
+        return json.dumps([])
 
 def get_fundamentals(symbol: str) -> Dict[str, Any]:
     """

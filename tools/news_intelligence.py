@@ -1,10 +1,9 @@
 """
 News Intelligence & Sentiment Analysis Tools
-Uses yfinance for news headlines and TextBlob for sentiment scoring.
+Uses yfinance for news headlines and FinBERT (Modal) for sentiment scoring.
 """
 
 import yfinance as yf
-from textblob import TextBlob
 from gnews import GNews
 from typing import List, Dict, Any
 import logging
@@ -12,12 +11,9 @@ from typing import List, Dict, Any
 import logging
 from tools.watchlist import _load_watchlist
 from newsapi import NewsApiClient
-from config import NEWSAPI_KEY
+from config import NEWSAPI_KEY, MODAL_ENDPOINT_URL
 import requests
 import os
-
-# Placeholder URL - User must update this after deployment
-MODAL_ENDPOINT_URL = os.getenv("MODAL_ENDPOINT_URL", "https://replace-me-with-your-modal-url.modal.run")
 
 logger = logging.getLogger(__name__)
 
@@ -149,8 +145,7 @@ def get_newsapi_articles(symbol: str, max_items: int = 5) -> List[Dict]:
 
 def analyze_sentiment(text: str) -> Dict[str, Any]:
     """
-    Analyzes the sentiment of a given text using FinBERT on Modal (via Public Endpoint)
-    or falls back to TextBlob.
+    Analyzes the sentiment of a given text using FinBERT on Modal (via Public Endpoint).
     
     Args:
         text: Text to analyze (e.g., news headline, article).
@@ -164,7 +159,7 @@ def analyze_sentiment(text: str) -> Dict[str, Any]:
         if "replace-me" in MODAL_ENDPOINT_URL:
             raise ValueError("Modal URL not configured")
 
-        response = requests.post(MODAL_ENDPOINT_URL, json={"text": text}, timeout=5)
+        response = requests.post(MODAL_ENDPOINT_URL, json={"text": text}, timeout=15)
         response.raise_for_status()
         result = response.json()
         
@@ -189,29 +184,8 @@ def analyze_sentiment(text: str) -> Dict[str, Any]:
         }
         
     except Exception as e:
-        logger.warning(f"Modal FinBERT failed ({e}), falling back to TextBlob")
-        # Fallback to TextBlob
-        try:
-            blob = TextBlob(text)
-            polarity = blob.sentiment.polarity
-            subjectivity = blob.sentiment.subjectivity
-            
-            if polarity > 0.2:
-                classification = "POSITIVE"
-            elif polarity < -0.2:
-                classification = "NEGATIVE"
-            else:
-                classification = "NEUTRAL"
-            
-            return {
-                "text": text[:100] + "..." if len(text) > 100 else text,
-                "polarity": round(polarity, 3),
-                "subjectivity": round(subjectivity, 3),
-                "classification": classification,
-                "model": "TextBlob (Fallback)"
-            }
-        except Exception as e2:
-             return {"error": f"Error analyzing sentiment: {str(e2)}"}
+        logger.error(f"Modal FinBERT failed: {e}")
+        return {"error": f"Error analyzing sentiment: {str(e)}"}
 
 
 def get_symbol_sentiment(symbol: str) -> str:

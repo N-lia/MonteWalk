@@ -28,24 +28,14 @@ data/activity.log
 data/watchlist.json
 
 # Individual test files (ad-hoc testing, not part of test suite)
-test_alpaca_connection.py
-test_crypto.py
-test_gnews.py
-test_news.py
-test_resource.py
-test_technical.py
-test_watchlist.py
+test_*.py
 
 # Demo and verification scripts
 demo.py
 verify_mcp.py
-
-#Temporary/unnecessary documentation (internal use only)
-acritic.md
-MCP TOOLS.pdf
-ARCHITECTURE.md
-HACKATHON_SUBMISSION.md
-IMPLEMENTATION_SUMMARY.md
+inspect_gradio.py
+test_alpaca_scanner.py
+test_viz_integration.py
 
 # OS files
 .DS_Store

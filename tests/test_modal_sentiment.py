@@ -30,17 +30,16 @@ class TestModalSentiment(unittest.TestCase):
         self.assertEqual(result['model'], 'FinBERT (Modal Public)')
         
     @patch('tools.news_intelligence.requests.post')
-    def test_modal_failure_fallback(self, mock_post):
-        """Test fallback to TextBlob when Modal fails."""
+    def test_modal_failure(self, mock_post):
+        """Test graceful failure when Modal fails (no TextBlob fallback)."""
         # Mock request failure
         mock_post.side_effect = Exception("Connection error")
         
         result = analyze_sentiment("This is a bad company.")
         
-        # Should fall back to TextBlob
-        self.assertEqual(result['model'], 'TextBlob (Fallback)')
-        # TextBlob sentiment for "bad" is negative
-        self.assertEqual(result['classification'], 'NEGATIVE')
+        # Should return error dict
+        self.assertIn('error', result)
+        self.assertIn('Connection error', result['error'])
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,0 +1,49 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment variables
+.env
+
+# Data files (created at runtime)
+data/
+
+# Test files
+test_*.py
+tests/
+
+# Git
+.git/
+.gitignore
+
+# Documentation (will be in repo)
+.DS_Store
+Thumbs.db
+
+# Package management
+uv.lock
+*.egg-info
+
+# Demo files
+demo.py
+verify_mcp.py
+inspect_gradio.py
+DOCKER_DEPLOYMENT.md
+DEMO_SCRIPT.md
+SOCIAL_POST_TEMPLATE.md

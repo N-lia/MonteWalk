@@ -74,13 +74,14 @@ def max_drawdown() -> str:
     
     return f"Maximum Drawdown: {max_dd:.2%}"
 
-def monte_carlo_simulation(simulations: int = 1000, days: int = 252) -> str:
+def monte_carlo_simulation(simulations: int = 1000, days: int = 252, visualize: bool = False) -> str:
     """
     Runs a Monte Carlo simulation using Geometric Brownian Motion (Log Returns).
     
     Args:
         simulations: Number of paths to simulate.
         days: Number of days to project forward.
+        visualize: If True, returns a histogram of final outcomes.
     """
     data, weights = _get_portfolio_data()
     if data is None:
@@ -119,14 +120,32 @@ def monte_carlo_simulation(simulations: int = 1000, days: int = 252) -> str:
         portfolio_sims[:, i] = initial_value * np.exp(cum_log_ret)
         
     final_values = portfolio_sims[-1, :]
+    returns = (final_values - 1) * 100  # Convert to percentage
     expected_return = np.mean(final_values) - 1
     worst_case = np.percentile(final_values, 5) - 1
     best_case = np.percentile(final_values, 95) - 1
     
-    return (f"Monte Carlo Results ({simulations} sims, {days} days) [Log Normal]:\n"
+    result = (f"Monte Carlo Results ({simulations} sims, {days} days) [Log Normal]:\n"
             f"Expected Return: {expected_return:.2%}\n"
             f"5th Percentile (VaR 95%): {worst_case:.2%}\n"
             f"95th Percentile (Upside): {best_case:.2%}")
+    
+    if visualize:
+        try:
+            from tools.visualizer import plot_histogram
+            chart = plot_histogram(
+                returns,
+                bins=50,
+                title=f"Monte Carlo Simulation - {simulations} Paths ({days} days)",
+                x_label="Return (%)",
+                percentiles=[5, 50, 95]
+            )
+            result += f"\n\n{chart}"
+        except Exception as e:
+            logger.error(f"Error generating visualization: {e}")
+            result += f"\n(Visualization error: {str(e)})"
+    
+    return result
 
 def validate_trade(symbol: str, side: Literal["buy", "sell"], qty: float, current_price: float) -> Optional[str]:
     """

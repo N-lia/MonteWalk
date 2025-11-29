@@ -378,7 +378,7 @@ get_news("AAPL", max_items=5)
 
 #### `analyze_sentiment`
 
-Analyzes sentiment of text using TextBlob NLP.
+Analyzes sentiment of text using FinBERT (Modal).
 
 **Parameters:**
 - `text` (str): Text to analyze
@@ -388,7 +388,7 @@ Analyzes sentiment of text using TextBlob NLP.
 **Example:**
 ```python
 analyze_sentiment("Apple announces record-breaking earnings!")
-# Returns: {"text": "Apple announces...", "polarity": 0.75, "subjectivity": 0.6, "classification": "POSITIVE"}
+# Returns: {"text": "Apple announces...", "polarity": 0.98, "subjectivity": 0.0, "classification": "POSITIVE", "model": "FinBERT (Modal Public)"}
 ```
 
 **Classification:**

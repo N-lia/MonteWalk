@@ -40,7 +40,8 @@ class SentimentModel:
     Production-ready FinBERT Sentiment Analysis Service.
     """
     
-    def __enter__(self):
+    @modal.enter()
+    def load_model(self):
         """
         Load the model and tokenizer when the container starts.
         """

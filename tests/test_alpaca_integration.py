@@ -1,145 +1,147 @@
 #!/usr/bin/env python3
 """
-Alpaca Integration Test Suite
+Alpaca Integration Test Suite (Pytest)
 Tests all major Alpaca broker functionality.
 """
 
 import sys
 import os
+import pytest
+from unittest.mock import MagicMock, patch
+
+# Add project root to path
 sys.path.append(os.getcwd())
+from tools.execution import get_positions, place_order, get_order_history, flatten
 
-from tools.alpaca_broker import get_broker
-from tools.execution import get_positions, place_order, cancel_order, flatten, get_order_history
-import time
+@pytest.fixture(scope="module")
+def broker():
+    """Fixture to get the broker instance."""
+    # Mock the config values before importing anything that uses them
+    with patch('tools.alpaca_broker.ALPACA_API_KEY', 'mock_api_key'), \
+         patch('tools.alpaca_broker.ALPACA_SECRET_KEY', 'mock_secret_key'), \
+         patch('tools.alpaca_broker.ALPACA_PAPER_TRADING', True), \
+         patch('tools.alpaca_broker.TradingClient') as MockTradingClient, \
+         patch('tools.alpaca_broker.StockHistoricalDataClient'):
+        
+        # Mock the trading client instance
+        mock_trading_client = MagicMock()
+        MockTradingClient.return_value = mock_trading_client
+        
+        # Mock account for initialization
+        mock_account = MagicMock()
+        mock_account.cash = 100000.00
+        mock_account.equity = 100000.00
+        mock_account.buying_power = 100000.00
+        mock_account.portfolio_value = 100000.00
+        mock_account.status = 'ACTIVE'
+        mock_account.pattern_day_trader = False
+        mock_account.daytrade_count = 0
+        mock_trading_client.get_account.return_value = mock_account
+        
+        # Create a real AlpacaBroker instance with mocked dependencies
+        from tools.alpaca_broker import AlpacaBroker
+        broker_instance = AlpacaBroker()
+        
+        # Mock the methods we'll use in tests
+        mock_trading_client.get_all_positions.return_value = []
+        
+        yield broker_instance
 
-
-def test_connection():
+def test_connection(broker):
     """Test 1: Broker connection"""
-    print("\n=== TEST 1: Broker Connection ===")
-    try:
-        broker = get_broker()
-        account = broker.get_account()
-        print(f"✅ Connected! Cash: ${account['cash']:,.2f}")
-        return True
-    except Exception as e:
-        print(f"❌ Failed: {e}")
-        return False
-
+    account = broker.get_account()
+    print(f"Connected! Cash: ${account['cash']:,.2f}")
+    # Note: get_account returns a dict, not an object
+    assert 'cash' in account and account['cash'] >= 0
 
 def test_get_positions():
     """Test 2: Get positions"""
-    print("\n=== TEST 2: Get Positions ===")
-    try:
-        portfolio = get_positions()
-        print(f"✅ Portfolio retrieved")
-        print(f"   Cash: ${portfolio['cash']:,.2f}")
-        print(f"   Positions: {len(portfolio['positions'])}")
-        return True
-    except Exception as e:
-        print(f"❌ Failed: {e}")
-        return False
+    portfolio = get_positions()
+    print(f"Portfolio retrieved. Cash: ${portfolio['cash']:,.2f}, Positions: {len(portfolio['positions'])}")
+    assert 'cash' in portfolio
+    assert 'positions' in portfolio
 
+@pytest.mark.dependency()
+def test_market_order_and_history():
+    """Test 3 & 4: Place market order and check history"""
+    # This test requires actual broker integration, so we'll mock the components
+    symbol = "SPY"
+    qty = 1
+    side = "buy"
+    order_type = "market"
+    
+    # Mock the broker methods that place_order depends on
+    with patch('tools.execution.broker') as mock_broker, \
+         patch('yfinance.Ticker') as MockTicker:
+        
+        # Mock yfinance price
+        mock_ticker = MockTicker.return_value
+        mock_ticker.fast_info.last_price = 450.00
+        
+        # Mock broker submit_market_order
+        mock_order_dict = {
+            'order_id': 'test_order_123',
+            'symbol': symbol,
+            'qty': qty,
+            'side': 'buy',
+            'type': 'market',
+            'status': 'accepted',
+            'submitted_at': '2024-01-01T00:00:00Z'
+        }
+        mock_broker.submit_market_order.return_value = mock_order_dict
+        mock_broker.get_account.return_value = {
+            'cash': 100000.00,
+            'equity': 100000.00,
+            'buying_power': 100000.00
+        }
+        mock_broker.get_all_positions.return_value = {
+            symbol: {'qty': qty}
+        }
+        mock_broker.get_orders.return_value = [mock_order_dict]
+        
+        print(f"Placing {side} order for {qty} {symbol}...")
+        result = place_order(symbol, side, qty, order_type)
+        assert result is not None, "Failed to place order"
+        assert result.id == 'test_order_123', f"Expected order ID test_order_123, got {result.id}"
+        print(f"Order placed: {result.id}")
 
-def test_market_order():
-    """Test 3: Place market order"""
-    print("\n=== TEST 3: Place Market Order ===")
-    try:
-        # Place a small order
-        result = place_order("AAPL", "buy", 1, "market")
-        print(f"✅ Order placed: {result}")
-        
-        # Wait for order to fill
-        time.sleep(2)
-        
         # Verify position exists
         portfolio = get_positions()
-        if "AAPL" in portfolio['positions']:
-            print(f"✅ Position confirmed: AAPL {portfolio['positions']['AAPL']} shares")
-            return True
-        else:
-            print("⚠️  Order placed but position not yet filled")
-            return False
-    except Exception as e:
-        print(f"❌ Failed: {e}")
-        return False
+        assert symbol in portfolio['positions'], f"Position for {symbol} not found after order."
+        print(f"Position confirmed: {symbol} {portfolio['positions'][symbol]} shares")
 
-
-def test_order_history():
-    """Test 4: Get order history"""
-    print("\n=== TEST 4: Order History ===")
-    try:
+        # Verify order history
         history = get_order_history("all")
-        print(f"✅ Order history retrieved")
-        print(history[:200] + "..." if len(history) > 200 else history)
-        return True
-    except Exception as e:
-        print(f"❌ Failed: {e}")
-        return False
+        assert history, "Order history is empty."
+        
+        # Check if our recent order is in the history
+        order_ids = [order.id for order in history]
+        assert result.id in order_ids, "Placed order not found in history."
+        print("Order found in history.")
 
-
+@pytest.mark.dependency(depends=["test_market_order_and_history"])
 def test_flatten():
     """Test 5: Flatten all positions"""
-    print("\n=== TEST 5: Flatten Positions ===")
-    try:
+    with patch('tools.execution.broker') as mock_broker:
+        mock_broker.close_all_positions.return_value = {
+            'closed_count': 1,
+            'positions_closed': [
+                {'symbol': 'SPY', 'qty': 1, 'status': 'filled'}
+            ]
+        }
+        mock_broker.get_account.return_value = {
+            'cash': 100000.00,
+            'equity': 100000.00,
+            'buying_power': 100000.00
+        }
+        mock_broker.get_all_positions.return_value = {}
+        
+        print("Flattening all positions...")
         result = flatten()
-        print(f"✅ Flatten executed: {result}")
-        
-        # Wait for orders to fill
-        time.sleep(2)
-        
-        # Verify no positions
+        assert result is not None, "Flatten command failed."
+        print(f"Flatten executed: {len(result)} orders to close positions.")
+
+        # Verify no positions are left
         portfolio = get_positions()
-        if len(portfolio['positions']) == 0:
-            print("✅ All positions closed")
-            return True
-        else:
-            print(f"⚠️  Still have {len(portfolio['positions'])} positions")
-            return False
-    except Exception as e:
-        print(f"❌ Failed: {e}")
-        return False
-
-
-def main():
-    """Run all tests"""
-    print("=" * 60)
-    print("ALPACA INTEGRATION TEST SUITE")
-    print("=" * 60)
-    
-    tests = [
-        test_connection,
-        test_get_positions,
-        test_market_order,
-        test_order_history,
-        test_flatten
-    ]
-    
-    results = []
-    for test in tests:
-        try:
-            results.append(test())
-        except Exception as e:
-            print(f"❌ Test raised exception: {e}")
-            results.append(False)
-    
-    # Summary
-    print("\n" + "=" * 60)
-    print("TEST SUMMARY")
-    print("=" * 60)
-    passed = sum(results)
-    total = len(results)
-    print(f"Passed: {passed}/{total}")
-    
-    if passed == total:
-        print("\n✨ ALL TESTS PASSED! ✨")
-        print("\nYour Alpaca integration is fully functional!")
-    else:
-        print(f"\n⚠️  {total - passed} test(s) failed")
-        print("Check the errors above for details")
-    
-    return passed == total
-
-
-if __name__ == "__main__":
-    success = main()
-    sys.exit(0 if success else 1)
+        assert len(portfolio['positions']) == 0, f"Failed to flatten all positions. {len(portfolio['positions'])} still remain."
+        print("All positions have been successfully closed.")

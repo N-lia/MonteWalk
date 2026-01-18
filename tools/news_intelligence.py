@@ -5,15 +5,12 @@ Uses yfinance for news headlines and FinBERT (Modal) for sentiment scoring.
 
 import yfinance as yf
 from gnews import GNews
-from typing import List, Dict, Any
-import logging
-from typing import List, Dict, Any
+from typing import Any
 import logging
 from tools.watchlist import _load_watchlist
 from newsapi import NewsApiClient
 from config import NEWSAPI_KEY, MODAL_ENDPOINT_URL
 import requests
-import os
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +81,7 @@ def get_news(symbol: str, max_items: int = 10) -> str:
         return f"Error fetching news for {symbol}: {str(e)}"
 
 
-def get_google_news(symbol: str, max_items: int = 5) -> List[Dict]:
+def get_google_news(symbol: str, max_items: int = 5) -> list[dict]:
     """
     Fetches news from Google News via GNews library.
     """
@@ -107,7 +104,7 @@ def get_google_news(symbol: str, max_items: int = 5) -> List[Dict]:
         return []
 
 
-def get_newsapi_articles(symbol: str, max_items: int = 5) -> List[Dict]:
+def get_newsapi_articles(symbol: str, max_items: int = 5) -> list[dict]:
     """
     Fetches news from NewsAPI.org using the company name or symbol.
     """
@@ -143,7 +140,7 @@ def get_newsapi_articles(symbol: str, max_items: int = 5) -> List[Dict]:
         return []
 
 
-def analyze_sentiment(text: str) -> Dict[str, Any]:
+def analyze_sentiment(text: str) -> dict[str, Any]:
     """
     Analyzes the sentiment of a given text using FinBERT on Modal (via Public Endpoint).
     
@@ -151,7 +148,7 @@ def analyze_sentiment(text: str) -> Dict[str, Any]:
         text: Text to analyze (e.g., news headline, article).
     
     Returns:
-        Dictionary with polarity, confidence, and classification.
+        dictionary with polarity, confidence, and classification.
     """
     # Try Modal first
     try:

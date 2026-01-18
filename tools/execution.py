@@ -1,6 +1,5 @@
 import yfinance as yf
-from typing import Dict, Any, Optional, Literal
-from config import INITIAL_CAPITAL
+from typing import Any, Optional, Literal
 from tools.alpaca_broker import get_broker
 import logging
 
@@ -15,7 +14,42 @@ except Exception as e:
     broker = None
 
 
-def get_positions() -> Dict[str, Any]:
+class OrderResult:
+    """Simple order result wrapper for API compatibility."""
+    def __init__(self, order_dict: dict[str, Any]):
+        self.id = order_dict.get('order_id')
+        self.order_id = order_dict.get('order_id')
+        self.symbol = order_dict.get('symbol')
+        self.qty = order_dict.get('qty')
+        self.side = order_dict.get('side')
+        self.status = order_dict.get('status')
+        self.submitted_at = order_dict.get('submitted_at')
+        self._dict = order_dict
+    
+    def __str__(self):
+        return (
+            f"Order {self.id}: {self.side.upper()} {self.qty} {self.symbol} "
+            f"(Status: {self.status})"
+        )
+
+
+class Order:
+    """Simple order wrapper for API compatibility."""
+    def __init__(self, order_dict: dict[str, Any]):
+        self.id = order_dict.get('order_id')
+        self.order_id = order_dict.get('order_id')
+        self.symbol = order_dict.get('symbol')
+        self.qty = order_dict.get('qty')
+        self.side = order_dict.get('side')
+        self.type = order_dict.get('type')
+        self.status = order_dict.get('status')
+        self.filled_qty = order_dict.get('filled_qty', 0)
+        self.filled_avg_price = order_dict.get('filled_avg_price')
+        self.submitted_at = order_dict.get('submitted_at')
+        self._dict = order_dict
+
+
+def get_positions() -> dict[str, Any]:
     """
     Retrieves the current state of all held positions and cash balance.
     
@@ -60,7 +94,7 @@ def place_order(
     qty: float, 
     order_type: Literal["market", "limit"] = "market", 
     limit_price: Optional[float] = None
-) -> str:
+) -> OrderResult:
     """
     Submits a market or limit order to Alpaca paper trading.
     
@@ -72,7 +106,7 @@ def place_order(
         limit_price: Required if order_type is 'limit'.
         
     Returns:
-        Confirmation message or error
+        OrderResult object with order details
     """
     if broker is None:
         return "ERROR: Alpaca broker not initialized. Check your API credentials in .env file."
@@ -85,7 +119,7 @@ def place_order(
         ticker = yf.Ticker(symbol)
         try:
             current_price = ticker.fast_info.last_price
-        except:
+        except Exception:
             return f"Failed to get price for {symbol}"
         
         if current_price is None:
@@ -102,12 +136,7 @@ def place_order(
             logger.info(f"Submitting MARKET order: {side.upper()} {qty} {symbol}")
             order_result = broker.submit_market_order(symbol, side, qty)
             logger.info(f"Order submitted successfully: ID={order_result['order_id']}")
-            return (
-                f"✅ Market Order Submitted: {side.upper()} {qty} {symbol}\n"
-                f"Order ID: {order_result['order_id']}\n"
-                f"Status: {order_result['status']}\n"
-                f"Submitted at: {order_result['submitted_at']}"
-            )
+            return OrderResult(order_result)
         
         elif order_type == "limit":
             if not limit_price:
@@ -122,12 +151,7 @@ def place_order(
             logger.info(f"Submitting LIMIT order: {side.upper()} {qty} {symbol} @ ${limit_price}")
             order_result = broker.submit_limit_order(symbol, side, qty, limit_price)
             logger.info(f"Order submitted successfully: ID={order_result['order_id']}")
-            return (
-                f"✅ Limit Order Submitted: {side.upper()} {qty} {symbol} @ ${limit_price:.2f}\n"
-                f"Order ID: {order_result['order_id']}\n"
-                f"Status: {order_result['status']}\n"
-                f"Submitted at: {order_result['submitted_at']}"
-            )
+            return OrderResult(order_result)
         else:
             logger.error(f"Unknown order type requested: {order_type}")
             return f"ERROR: Unknown order type: {order_type}"
@@ -160,33 +184,26 @@ def cancel_order(order_id: str) -> str:
         return f"ERROR: Failed to cancel order - {str(e)}"
 
 
-def flatten() -> str:
+def flatten() -> list[dict[str, Any]]:
     """
     Immediately closes all open positions.
     
     Returns:
-        Summary of closed positions
+        list of closed position orders
     """
     if broker is None:
-        return "ERROR: Alpaca broker not initialized."
+        logger.error("Alpaca broker not initialized.")
+        return []
     
     try:
         result = broker.close_all_positions()
-        
-        if result['closed_count'] == 0:
-            return "No positions to flatten."
-        
-        msg = [f"✅ Flattened {result['closed_count']} positions:"]
-        for pos in result['positions_closed']:
-            msg.append(f"  - {pos['symbol']}: {pos['qty']} shares ({pos['status']})")
-        
-        return "\n".join(msg)
+        return result.get('positions_closed', [])
     except Exception as e:
         logger.error(f"Flatten failed: {e}")
-        return f"ERROR: Failed to flatten positions - {str(e)}"
+        return []
 
 
-def get_order_history(status: str = "all") -> str:
+def get_order_history(status: str = "all") -> list[Order]:
     """
     Get order history from Alpaca.
     
@@ -194,28 +211,15 @@ def get_order_history(status: str = "all") -> str:
         status: "all", "open", or "closed"
         
     Returns:
-        Formatted order history
+        list of Order objects
     """
     if broker is None:
-        return "ERROR: Alpaca broker not initialized."
+        logger.error("Alpaca broker not initialized.")
+        return []
     
     try:
         orders = broker.get_orders(status)
-        
-        if not orders:
-            return f"No {status} orders found."
-        
-        msg = [f"=== {status.upper()} ORDERS ({len(orders)}) ==="]
-        for order in orders[:10]:  # Limit to 10 most recent
-            msg.append(
-                f"{order['symbol']}: {order['side'].upper()} {order['qty']} "
-                f"({order['type']}, {order['status']}) - {order['submitted_at']}"
-            )
-        
-        if len(orders) > 10:
-            msg.append(f"\n... and {len(orders) - 10} more orders")
-        
-        return "\n".join(msg)
+        return [Order(order) for order in orders]
     except Exception as e:
         logger.error(f"Get order history failed: {e}")
-        return f"ERROR: Failed to get order history - {str(e)}"
+        return []

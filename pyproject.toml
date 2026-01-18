@@ -1,7 +1,7 @@
 [project]
 name = "montewalk"
 version = "0.1.0"
-description = "Add your description here"
+description = "MCP server bringing institutional-grade quantitative finance to conversational AI Agents "
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -24,4 +24,10 @@ dependencies = [
     "seaborn>=0.13.2",
     "mplfinance>=0.12.10b0",
     "pillow>=12.0.0",
+    "pytest-dependency>=0.6.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
 ]

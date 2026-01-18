@@ -229,6 +229,7 @@ MonteWalk democratizes **institutional-grade quantitative finance** for retail t
 
 #### Prerequisites
 - Python 3.12+
+- [uv](https://github.com/astral-sh/uv) (optional, recommended)
 - [Alpaca Paper Trading Account](https://alpaca.markets) (free)
 - [NewsAPI Key](https://newsapi.org) (optional, 100 free requests/day)
 
@@ -236,9 +237,12 @@ MonteWalk democratizes **institutional-grade quantitative finance** for retail t
 ```bash
 git clone https://github.com/N-lia/MonteWalk.git
 cd MonteWalk
-python3 -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+# Option 1: Using uv (recommended) - handles venv creation and dependency install
+uv sync
+# Option 2: Using pip
+# python3 -m venv .venv
+# source .venv/bin/activate  # Windows: .venv\Scripts\activate
+# pip install -r requirements.txt
 ```
 
 #### Configuration
